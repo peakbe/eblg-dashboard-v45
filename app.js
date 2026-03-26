@@ -19,13 +19,11 @@ let runwayAxisLabel = null;
 let runwayPlaneIcon = null;
 
 function drawRunwayAxis(runwayName, phase) {
-  // Nettoyage des anciennes couches
   if (runwayAxisLayer) map.removeLayer(runwayAxisLayer);
   if (runwayAxisArrow) map.removeLayer(runwayAxisArrow);
   if (runwayAxisLabel) map.removeLayer(runwayAxisLabel);
   if (runwayPlaneIcon) map.removeLayer(runwayPlaneIcon);
 
-  // Coordonnées des seuils
   const RW22 = [50.64594, 5.44375];
   const RW04 = [50.65480, 5.46530];
 
@@ -39,10 +37,8 @@ function drawRunwayAxis(runwayName, phase) {
     end = RW22;
   }
 
-  // Couleur selon phase
   const color = (phase === "Décollage") ? "#f97316" : "#60a5fa";
 
-  // Axe principal
   runwayAxisLayer = L.polyline([start, end], {
     color,
     weight: 4,
@@ -50,7 +46,6 @@ function drawRunwayAxis(runwayName, phase) {
     dashArray: "10, 10"
   }).addTo(map);
 
-  // Flèche animée
   runwayAxisArrow = L.polylineDecorator([start, end], {
     patterns: [
       {
@@ -67,6 +62,27 @@ function drawRunwayAxis(runwayName, phase) {
       }
     ]
   }).addTo(map);
+
+  const midLat = (start[0] + end[0]) / 2;
+  const midLng = (start[1] + end[1]) / 2;
+
+  runwayAxisLabel = L.marker([midLat, midLng], {
+    icon: L.divIcon({
+      className: "runway-label",
+      html: `<div style="padding:4px 8px;background:white;border-radius:4px;border:1px solid #ccc;font-size:12px;">
+        ${phase}
+      </div>`
+    })
+  }).addTo(map);
+
+  runwayPlaneIcon = L.marker(start, {
+    icon: L.divIcon({
+      className: "plane-icon",
+      html: `<div style="font-size:20px;">✈️</div>`
+    })
+  }).addTo(map);
+}
+
 
   // Label au milieu
   const midLat = (start[0] + end[0]) / 2;
