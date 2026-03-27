@@ -1,226 +1,108 @@
 /* ----------------------------------------------------------
-   CONFIG
+   CONSTANTES
 ---------------------------------------------------------- */
+
 const AVWX_API_KEY = "ersegQzkf2Dfal-o26B4b5uzMrXBeHK2jOpOaY7nffc";
-
 const PROXY = "https://eblg-proxy.onrender.com/proxy?url=";
-
 const FIDS_ARR = PROXY + encodeURIComponent("https://fids.liegeairport.com/api/flights/Arrivals");
 const FIDS_DEP = PROXY + encodeURIComponent("https://fids.liegeairport.com/api/flights/Departures");
 
-const EBLG = { lat:50.6374, lon:5.4432, runways:[
-  { name:"04", heading:40 },
-  { name:"22", heading:220 }
-]};
+const MAP_CENTER = [50.6374, 5.4432];
+const MAP_ZOOM   = 12;
 
-function formatLocal(t) {
-  if (!t) return "-";
-  return new Date(t).toLocaleTimeString("fr-BE", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Europe/Brussels"
+/* ----------------------------------------------------------
+   MAP LEAFLET
+---------------------------------------------------------- */
+
+let map;
+let runwayLayer;
+let sonometerLayer;
+let sonometers = {}; // {id: {lat, lon, marker, status}}
+
+function initMap() {
+  map = L.map("map", {
+    center: MAP_CENTER,
+    zoom: MAP_ZOOM,
+    preferCanvas: true
+  });
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(map);
+
+  runwayLayer = L.layerGroup().addTo(map);
+  sonometerLayer = L.layerGroup().addTo(map);
+
+  initSonometers();
+}
+
+function initSonometers() {
+  // Exemple : à remplacer par tes vrais sonomètres
+  const data = [
+    { id: "S1", lat: 50.65, lon: 5.44 },
+    { id: "S2", lat: 50.64, lon: 5.45 },
+    { id: "S3", lat: 50.63, lon: 5.46 }
+  ];
+
+  data.forEach(s => {
+    const marker = L.circleMarker([s.lat, s.lon], {
+      radius: 6,
+      color: "#4b5563",
+      fillColor: "#9ca3af",
+      fillOpacity: 0.9
+    }).addTo(sonometerLayer);
+
+    sonometers[s.id] = {
+      id: s.id,
+      lat: s.lat,
+      lon: s.lon,
+      marker,
+      status: "neutral"
+    };
   });
 }
-
-function minutesFromNow(time) {
-  if (!time) return "-";
-  const now = new Date();
-  const t = new Date(time);
-  const diffMin = Math.round((t - now) / 60000);
-
-  if (diffMin < -5) return `il y a ${Math.abs(diffMin)} min`;
-  if (diffMin < 1) return "maintenant";
-  return `dans ${diffMin} min`;
-}
-
-
-function isDelayed(v) {
-  const sched = v.sTx || v.scheduled;
-  const est = v.eTx;
-  const act = v.aTx;
-
-  if (!sched) return false;
-
-  const s = new Date(sched);
-  if (act && new Date(act) > s) return true;
-  if (est && new Date(est) > s) return true;
-
-  return false;
-}
-
-
-let runwayAxisLayer = null;
-let runwayAxisArrow = null;
-let runwayAxisLabel = null;
-let runwayPlaneIcon = null;
-
-function drawRunwayAxis(runwayName, phase) {
-
-  // Nettoyage des anciennes couches
-  if (runwayAxisLayer) map.removeLayer(runwayAxisLayer);
-  if (runwayAxisArrow) map.removeLayer(runwayAxisArrow);
-  if (runwayAxisLabel) map.removeLayer(runwayAxisLabel);
-  if (runwayPlaneIcon) map.removeLayer(runwayPlaneIcon);
-
-  // Coordonnées des seuils
-  const RW22 = [50.64594, 5.44375];
-  const RW04 = [50.65480, 5.46530];
-
-  let start, end;
-
-  if (runwayName === "22") {
-    start = RW22;
-    end = RW04;
-  } else {
-    start = RW04;
-    end = RW22;
-  }
-
-   function flightColor(v) {
-  if (v.flightPax && v.flightPax.startsWith("C")) return "#0ea5e9"; // Cargo
-  return "#10b981"; // Pax
-}
-
-  // Couleur selon phase
-  const color = (phase === "Décollage") ? "#f97316" : "#60a5fa";
-
-  // Axe principal
-  runwayAxisLayer = L.polyline([start, end], {
-    color,
-    weight: 4,
-    opacity: 0.9,
-    dashArray: "10, 10"
-  }).addTo(map);
-
-  // Flèche animée
-  runwayAxisArrow = L.polylineDecorator([start, end], {
-    patterns: [
-      {
-        offset: '0%',
-        repeat: 50,
-        symbol: L.Symbol.arrowHead({
-          pixelSize: 12,
-          polygon: false,
-          pathOptions: {
-            color: color,
-            weight: 3
-          }
-        })
-      }
-    ]
-  }).addTo(map);
-
-  // Label au milieu
-  const midLat = (start[0] + end[0]) / 2;
-  const midLng = (start[1] + end[1]) / 2;
-
-  runwayAxisLabel = L.marker([midLat, midLng], {
-    icon: L.divIcon({
-      className: "runway-label",
-      html: `<div style="padding:4px 8px;background:white;border-radius:4px;border:1px solid #ccc;font-size:12px;">
-        ${phase}
-      </div>`
-    })
-  }).addTo(map);
-
-  // Icône avion
-  runwayPlaneIcon = L.marker(start, {
-    icon: L.divIcon({
-      className: "plane-icon",
-      html: `<div style="font-size:20px;">✈️</div>`
-    })
-  }).addTo(map);
-
-} // <-- FIN CORRECTE DE LA FONCTION
-
-/* ----------------------------------------------------------
-   SONOMÈTRES
----------------------------------------------------------- */
-const SONOS = [
-  { id:"F017", lat:50.764883, lon:5.630606 },
-  { id:"F001", lat:50.737, lon:5.608833 },
-  { id:"F014", lat:50.718894, lon:5.573164 },
-  { id:"F015", lat:50.688839, lon:5.526217 },
-  { id:"F005", lat:50.639331, lon:5.323519 },
-  { id:"F003", lat:50.601167, lon:5.3814 },
-  { id:"F011", lat:50.601142, lon:5.356006 },
-  { id:"F008", lat:50.594878, lon:5.35895 },
-  { id:"F002", lat:50.588414, lon:5.370522 },
-  { id:"F007", lat:50.590756, lon:5.345225 },
-  { id:"F009", lat:50.580831, lon:5.355417 },
-  { id:"F004", lat:50.605414, lon:5.321406 },
-  { id:"F010", lat:50.599392, lon:5.313492 },
-  { id:"F013", lat:50.586914, lon:5.308678 },
-  { id:"F016", lat:50.619617, lon:5.295345 },
-  { id:"F006", lat:50.609594, lon:5.271403 },
-  { id:"F012", lat:50.621917, lon:5.254747 }
-];
-
-const RULES = {
-  "22": {
-    "Décollage": {
-      vert: ["F002","F003","F004","F005","F006","F007","F008","F009","F010","F011","F012","F013","F016"],
-      rouge: []
-    },
-    "Atterrissage": {
-      vert: ["F001","F014","F015","F017"],
-      rouge: []
-    }
-  },
-  "04": {
-    "Décollage": {
-      vert: ["F002","F003","F007","F008","F009","F011","F013"],
-      rouge: ["F004","F005","F006","F010","F012","F016"]
-    },
-    "Atterrissage": {
-      vert: ["F014","F015"],
-      rouge: ["F001","F017"]
-    }
-  }
-};
-
-/* ----------------------------------------------------------
-   MAP
----------------------------------------------------------- */
-const map = L.map("map").setView([EBLG.lat, EBLG.lon], 11);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-L.circleMarker([EBLG.lat, EBLG.lon], {radius:7, color:"#10b981", fillColor:"#10b981", fillOpacity:1})
-  .addTo(map)
-  .bindPopup("EBLG – Liège Airport");
-
-const SONO_MARKERS = SONOS.map(s => ({
-  ...s,
-  marker: L.circleMarker([s.lat, s.lon], {
-    radius:5, color:"#2563eb", fillColor:"#2563eb", fillOpacity:1
-  }).addTo(map).bindPopup(s.id)
-}));
-
-let corridorLayer = null;
-let arrowLayer = null;
 
 /* ----------------------------------------------------------
    METAR
 ---------------------------------------------------------- */
+
 async function fetchMetar() {
-  const url = PROXY + encodeURIComponent(
-    `https://avwx.rest/api/metar/EBLG?token=${AVWX_API_KEY}&format=json`
-  );
-  const r = await fetch(url);
-  return r.json();
+  const res = await fetch(METAR_URL);
+  if (!res.ok) throw new Error("METAR error");
+  return res.json();
 }
 
-function updateMetarUI(m) {
-  if (!m || !m.wind_direction) {
-    document.getElementById("meteo-summary").textContent = "METAR indisponible";
+function updateMetarUI(metar) {
+  const el = document.getElementById("meteo-summary");
+  if (!metar) {
+    el.textContent = "METAR indisponible";
     return;
   }
 
-  document.getElementById("meteo-summary").textContent =
-    `Vent ${m.wind_direction.value}° / ${m.wind_speed.value} kt – T° ${m.temperature.value}°C`;
+  // Adapte selon ton format METAR
+  const txt = `${metar.station || "EBLG"} ${metar.time || ""} 
+Vent ${metar.wind || "-"} 
+Visibilité ${metar.visibility || "-"} 
+Ciel ${metar.clouds || "-"}`;
 
-  document.getElementById("meteo-raw").textContent = m.raw;
+  el.textContent = txt;
+}
+
+/* ----------------------------------------------------------
+   FIDS : FETCH
+---------------------------------------------------------- */
+
+async function fetchFIDS() {
+  const [arr, dep] = await Promise.all([
+    fetch(FIDS_ARR).then(r => r.json()),
+    fetch(FIDS_DEP).then(r => r.json())
+  ]);
+
+  return {
+    arrivals: Array.isArray(arr) ? arr : [],
+    departures: Array.isArray(dep) ? dep : []
+  };
 }
 
 /* ----------------------------------------------------------
@@ -274,6 +156,7 @@ function flightColor(v) {
 /* ----------------------------------------------------------
    MINI TABLEAU : Prochains vols
 ---------------------------------------------------------- */
+
 function renderNextFlights(arrivals, departures) {
   const container = document.getElementById("next-flights");
 
@@ -303,6 +186,7 @@ function renderNextFlights(arrivals, departures) {
 /* ----------------------------------------------------------
    LISTE FIDS PRINCIPALE (compacte + RETARD + couleurs)
 ---------------------------------------------------------- */
+
 function updateFlightsUI(f) {
   const el = document.getElementById("flights-list");
 
@@ -351,6 +235,7 @@ function updateFlightsUI(f) {
 /* ----------------------------------------------------------
    LIMITATION À 10 VOLS
 ---------------------------------------------------------- */
+
 function limitNextFlights(list) {
   return list
     .filter(f => f.scheduled)
@@ -358,76 +243,115 @@ function limitNextFlights(list) {
     .slice(0, 10);
 }
 
-
 /* ----------------------------------------------------------
-   RUNWAY + COULOIR + FLÈCHES
+   RUNWAY
 ---------------------------------------------------------- */
-function extractRunway(f) {
-  const all = [...f.arrivals, ...f.departures];
-  const r = all.find(v => v.runway);
-  if (!r) return null;
 
-  const name = r.runway.replace(/[^0-9]/g,"");
-  return EBLG.runways.find(x => x.name === name) || null;
-}
+let currentRunway = null;
 
-function computePoint([lat,lon], heading, km) {
-  const R = 6371;
-  const d = km / R;
-  const br = heading * Math.PI/180;
-  const la = lat * Math.PI/180;
-  const lo = lon * Math.PI/180;
+function extractRunway(fids) {
+  const all = [...fids.arrivals, ...fids.departures];
+  if (!all.length) return null;
 
-  const la2 = Math.asin(Math.sin(la)*Math.cos(d) + Math.cos(la)*Math.sin(d)*Math.cos(br));
-  const lo2 = lo + Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(la), Math.cos(d)-Math.sin(la)*Math.sin(la2));
-
-  return [la2*180/Math.PI, lo2*180/Math.PI];
-}
-
-function buildCorridor(heading) {
-  const start = [EBLG.lat, EBLG.lon];
-  const end = computePoint(start, heading, 20);
-
-  const leftStart = computePoint(start, heading - 90, 1.5);
-  const rightStart = computePoint(start, heading + 90, 1.5);
-  const leftEnd = computePoint(end, heading - 90, 3.5);
-  const rightEnd = computePoint(end, heading + 90, 3.5);
-
-  return {
-    polygon: [leftStart, leftEnd, rightEnd, rightStart],
-    centerline: [start, end]
-  };
-}
-
-function computeImpacted(runwayName, phase) {
-  const rules = RULES[runwayName][phase];
-
-  const impacted = [];
-
-  SONO_MARKERS.forEach(s => {
-    if (rules.vert.includes(s.id)) {
-      s.marker.setStyle({ color: "#10b981", fillColor: "#10b981" }); // vert
-      impacted.push(s);
-    } else if (rules.rouge.includes(s.id)) {
-      s.marker.setStyle({ color: "#b91c1c", fillColor: "#b91c1c" }); // rouge
-      impacted.push(s);
-    } else {
-      s.marker.setStyle({ color: "#2563eb", fillColor: "#2563eb" }); // bleu par défaut
-    }
+  // Exemple simple : on prend la piste la plus fréquente
+  const counts = {};
+  all.forEach(v => {
+    if (!v.runway) return;
+    counts[v.runway] = (counts[v.runway] || 0) + 1;
   });
 
-   sonometers[id].status = status; // "ok", "impact", "neutral"
+  const entries = Object.entries(counts);
+  if (!entries.length) return null;
 
-  return impacted;
+  entries.sort((a, b) => b[1] - a[1]);
+  return { name: entries[0][0] };
 }
 
+function drawRunwayAxis(rw) {
+  runwayLayer.clearLayers();
+  if (!rw) return;
+
+  // Exemple très simplifié : segment fixe selon la piste
+  let coords;
+  if (rw.name === "22") {
+    coords = [
+      [50.64594, 5.44375],
+      [50.65480, 5.46530]
+    ];
+  } else if (rw.name === "04") {
+    coords = [
+      [50.65480, 5.46530],
+      [50.64594, 5.44375]
+    ];
+  } else {
+    return;
+  }
+
+  L.polyline(coords, {
+    color: "#f97316",
+    weight: 4
+  }).addTo(runwayLayer);
+
+  currentRunway = rw.name;
+  document.getElementById("runway-info").textContent = `Piste active : ${rw.name}`;
+}
 
 /* ----------------------------------------------------------
-   MAIN - REFRESH()
+   BOUTONS CARTE
 ---------------------------------------------------------- */
-async function refresh() {
 
-  /* METAR */
+function initMapButtons() {
+  const resetBtn = document.getElementById("reset-map");
+  const zoomRunwayBtn = document.getElementById("zoom-runway");
+  const zoomImpactedBtn = document.getElementById("zoom-impacted");
+  const zoomGlobalBtn = document.getElementById("zoom-global");
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      map.setView(MAP_CENTER, MAP_ZOOM);
+    });
+  }
+
+  if (zoomRunwayBtn) {
+    zoomRunwayBtn.addEventListener("click", () => {
+      if (!currentRunway) return;
+
+      if (currentRunway === "22") {
+        map.fitBounds([
+          [50.64594, 5.44375],
+          [50.65480, 5.46530]
+        ]);
+      } else if (currentRunway === "04") {
+        map.fitBounds([
+          [50.65480, 5.46530],
+          [50.64594, 5.44375]
+        ]);
+      }
+    });
+  }
+
+  if (zoomImpactedBtn) {
+    zoomImpactedBtn.addEventListener("click", () => {
+      const impacted = Object.values(sonometers).filter(s => s.status === "impact");
+      if (!impacted.length) return;
+
+      const bounds = L.latLngBounds(impacted.map(s => [s.lat, s.lon]));
+      map.fitBounds(bounds.pad(0.3));
+    });
+  }
+
+  if (zoomGlobalBtn) {
+    zoomGlobalBtn.addEventListener("click", () => {
+      map.setView(MAP_CENTER, MAP_ZOOM);
+    });
+  }
+}
+
+/* ----------------------------------------------------------
+   REFRESH GLOBAL
+---------------------------------------------------------- */
+
+async function refresh() {
   try {
     const metar = await fetchMetar();
     updateMetarUI(metar);
@@ -435,99 +359,34 @@ async function refresh() {
     document.getElementById("meteo-summary").textContent = "METAR indisponible";
   }
 
- /* FIDS */
-const fids = await fetchFIDS();
+  /* FIDS */
+  const fids = await fetchFIDS();
 
-fids.arrivals = limitNextFlights(fids.arrivals);
-fids.departures = limitNextFlights(fids.departures);
+  fids.arrivals = limitNextFlights(fids.arrivals);
+  fids.departures = limitNextFlights(fids.departures);
 
-// Maintenant on peut afficher
-updateFlightsUI(fids);
-renderNextFlights(fids.arrivals, fids.departures);
+  updateFlightsUI(fids);
+  renderNextFlights(fids.arrivals, fids.departures);
 
- /* RUNWAY */
-const rw = extractRunway(fids);
-if (!rw) {
-  document.getElementById("runway-info").textContent = "Piste non déterminée.";
-  return;
-}
-
-console.log("RUNWAY =", rw.name);
-
-/* PHASE */
-let phase;
-
-// 1) Lire la valeur du sélecteur
-const manual = document.getElementById("phase-select").value;
-
-// 2) Si manuel → override
-if (manual !== "auto") {
-  phase = manual;
-} else {
-  // 3) Sinon → logique automatique
-  phase = (rw.name === "22") ? "Décollage" : "Atterrissage";
-}
-
-console.log("PHASE =", phase);
-drawRunwayAxis(rw.name, phase);
-
-document.getElementById("runway-info").textContent =
-  `Piste ${rw.name} – ${phase}`;
-
-
-  document.getElementById("runway-info").textContent =
-    `Piste ${rw.name} (cap ${rw.heading}°)`;
-
-   window.currentRunway = rw.name;
-
-  /* COULOIR + SONOMÈTRES */
-  const impacted = computeImpacted(rw.name, phase);
-
-  document.getElementById("sonos-impacted").innerHTML =
-    impacted.length
-      ? impacted.map(s => `<span class="tag impacted">${s.id}</span>`).join(" ")
-      : "Aucun sonomètre impacté.";
-}
-
-/* === LISTENERS === */
-document.getElementById("phase-select").addEventListener("change", () => {
-  refresh();
-});
-
-document.getElementById("reset-map").addEventListener("click", () => {
-  map.setView([50.6374, 5.4432], 12); // centre + zoom par défaut
-});
-
-document.getElementById("zoom-runway").addEventListener("click", () => {
-  if (!window.currentRunway) return;
-
-  if (window.currentRunway === "22") {
-    map.fitBounds([
-      [50.64594, 5.44375],
-      [50.65480, 5.46530]
-    ]);
-  } else {
-    map.fitBounds([
-      [50.65480, 5.46530],
-      [50.64594, 5.44375]
-    ]);
+  /* RUNWAY */
+  const rw = extractRunway(fids);
+  if (!rw) {
+    document.getElementById("runway-info").textContent = "Piste non déterminée.";
+    return;
   }
-});
 
-document.getElementById("zoom-impacted").addEventListener("click", () => {
-  const impacted = Object.values(sonometers).filter(s => s.status === "impact");
+  drawRunwayAxis(rw);
 
-  if (impacted.length === 0) return;
+  // Ici tu peux aussi mettre à jour les sonomètres selon la piste / phase
+}
 
-  const bounds = L.latLngBounds(impacted.map(s => [s.lat, s.lon]));
-  map.fitBounds(bounds.pad(0.3));
-});
+/* ----------------------------------------------------------
+   INIT
+---------------------------------------------------------- */
 
-document.getElementById("zoom-global").addEventListener("click", () => {
-  map.setView([50.6374, 5.4432], 12);
-});
-
-/* 🔧 FIX : attendre que la carte soit prête */
-map.whenReady(() => {
+document.addEventListener("DOMContentLoaded", () => {
+  initMap();
+  initMapButtons();
   refresh();
+  setInterval(refresh, 60_000); // rafraîchissement chaque minute
 });
