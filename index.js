@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 
 /* ----------------------------------------------------------
-   PROXY GÉNÉRIQUE (déjà existant)
+   PROXY GÉNÉRIQUE
 ---------------------------------------------------------- */
 app.get("/proxy", async (req, res) => {
   const url = req.query.url;
@@ -22,29 +22,37 @@ app.get("/proxy", async (req, res) => {
 });
 
 /* ----------------------------------------------------------
-   METAR SÉCURISÉ
+   METAR SÉCURISÉ AVEC FALLBACK
 ---------------------------------------------------------- */
 app.get("/metar", async (req, res) => {
-    try {
-        const response = await fetch(`https://avwx.rest/api/metar/EBLG`, {
-            headers: { Authorization: process.env.AVWX_API_KEY }
-        });
+  try {
+    const response = await fetch(`https://avwx.rest/api/metar/EBLG`, {
+      headers: { Authorization: process.env.AVWX_API_KEY }
+    });
 
-        if (!response.ok) throw new Error("AVWX offline");
+    if (!response.ok) throw new Error("AVWX offline");
 
-        const data = await response.json();
-        return res.json(data);
+    const data = await response.json();
+    return res.json(data);
 
-    } catch (error) {
-        console.error("AVWX DOWN → fallback activé");
+  } catch (error) {
+    console.error("AVWX DOWN → fallback activé");
 
-        return res.json({
-            station: "EBLG",
-            flight_rules: "UNKNOWN",
-            raw: "METAR unavailable",
-            fallback: true,
-            timestamp: new Date().toISOString()
-        });
-    }
+    return res.json({
+      station: "EBLG",
+      flight_rules: "UNKNOWN",
+      raw: "METAR unavailable",
+      fallback: true,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
+/* ----------------------------------------------------------
+   DÉMARRAGE DU SERVEUR (MANQUAIT !)
+---------------------------------------------------------- */
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () => {
+  console.log(`Proxy running on port ${PORT}`);
+});
