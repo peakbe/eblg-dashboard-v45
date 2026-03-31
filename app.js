@@ -345,8 +345,7 @@ updateRunwayPanel(runway, windDir, windSpeed, phase);
     updateSonometers(runway);
     drawRunway(runway);
     drawCorridor(runway);
-    panel.innerText =
-    `Piste ${runway} – Vent ${windDir}°/${windSpeed} kt`;
+
 
 }
 
