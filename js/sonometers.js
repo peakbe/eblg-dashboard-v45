@@ -140,3 +140,27 @@ export async function playHeatmapHistory(map) {
         await new Promise(r => setTimeout(r, 300));
     }
 }
+export let clusterLayer = L.markerClusterGroup();
+
+export function initSonometers(map) {
+    SONOS.forEach(s => {
+        const marker = L.circleMarker([s.lat, s.lon], {
+            radius: 6,
+            color: "gray",
+            fillColor: "gray",
+            fillOpacity: 0.9,
+            weight: 1
+        });
+
+        clusterLayer.addLayer(marker);
+
+        marker.on("click", () => {
+            highlightSonometerInList(s.id);
+            showDetailPanel(s.id, [50.64695, 5.44340]);
+        });
+
+        sonometers[s.id] = { ...s, marker, status: "UNKNOWN" };
+    });
+
+    map.addLayer(clusterLayer);
+}
