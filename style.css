@@ -94,6 +94,15 @@ body {
     color: #ffd86b;
 }
 
+#debug-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
 /* ======================================================
    RUNWAY PANEL
 ====================================================== */
